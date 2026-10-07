@@ -94,7 +94,9 @@ docker run --rm -p 8080:8080 \
 
 Project already exists: **myXstack** `11fca3b4-87db-4176-8b76-3ea041f47251`, environment **production** `0545e3d7-9b42-48d8-ac5a-69448b0811a0`.
 
-Add **one new service** from this repo (`groupthinking/myxstack-agent`). `railway.toml` builds the Dockerfile and starts `python -u agent.py`. Health check is `GET /health`.
+Creating service `b1-mention-webhook` from this repo was attempted on 2026-10-07 and Railway returned `Your trial has expired. Please select a plan to continue using Railway.` No new service was created. The existing three services were not restarted or redeployed.
+
+After a plan is selected, add **one new service** from this repo (`groupthinking/myxstack-agent`), branch `cursor/b1-mention-webhook-34b3` until it is merged. `railway.toml` builds the Dockerfile and starts `python -u agent.py`. Health check is `GET /health`.
 
 Leave these services stopped. Do not redeploy them for B1:
 
