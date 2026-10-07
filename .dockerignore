@@ -1,0 +1,7 @@
+.git
+__pycache__
+*.pyc
+app
+node_modules
+test_agent.py
+README.md
