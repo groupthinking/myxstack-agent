@@ -48,21 +48,54 @@ test("placeholder token does not report success or call X", async () => {
 });
 
 test("POST route reports failure when the token is missing", async () => {
-  const previousUser = process.env.X_USER_ACCESS_TOKEN;
-  const previousBearer = process.env.X_BEARER_TOKEN;
+  const previous = saveRouteEnv();
+  process.env.CRON_SECRET = "cron-secret-for-test";
   delete process.env.X_USER_ACCESS_TOKEN;
   delete process.env.X_BEARER_TOKEN;
   try {
-    const response = await POST();
+    const response = await POST(authorizedRequest("cron-secret-for-test"));
     const body = (await response.json()) as { ran: boolean; status: string; error?: string };
     assert.equal(response.ok, false);
     assert.equal(response.status, 503);
     assert.equal(body.ran, false);
     assert.equal(body.status, "Cycle did not run");
+    assert.match(body.error ?? "", /X_USER_ACCESS_TOKEN or X_BEARER_TOKEN/);
     assert.doesNotMatch(body.status, /completed|started|success/i);
   } finally {
-    restoreEnv("X_USER_ACCESS_TOKEN", previousUser);
-    restoreEnv("X_BEARER_TOKEN", previousBearer);
+    restoreRouteEnv(previous);
+  }
+});
+
+test("POST without CRON_SECRET does not run the cycle", async () => {
+  const previous = saveRouteEnv();
+  delete process.env.CRON_SECRET;
+  process.env.X_BEARER_TOKEN = TOKEN;
+  try {
+    const response = await POST(authorizedRequest("anything"));
+    const body = (await response.json()) as { ran: boolean; status: string; error?: string; requests: unknown[] };
+    assert.equal(response.status, 503);
+    assert.equal(body.ran, false);
+    assert.equal(body.status, "Cycle did not run");
+    assert.match(body.error ?? "", /CRON_SECRET/);
+    assert.deepEqual(body.requests, []);
+  } finally {
+    restoreRouteEnv(previous);
+  }
+});
+
+test("POST with the wrong secret does not run the cycle", async () => {
+  const previous = saveRouteEnv();
+  process.env.CRON_SECRET = "cron-secret-for-test";
+  process.env.X_BEARER_TOKEN = TOKEN;
+  try {
+    const response = await POST(authorizedRequest("not-the-secret"));
+    const body = (await response.json()) as { ran: boolean; status: string; requests: unknown[] };
+    assert.equal(response.status, 401);
+    assert.equal(body.ran, false);
+    assert.equal(body.status, "Cycle did not run");
+    assert.deepEqual(body.requests, []);
+  } finally {
+    restoreRouteEnv(previous);
   }
 });
 
@@ -345,7 +378,24 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function restoreEnv(name: string, value: string | undefined) {
-  if (value === undefined) delete process.env[name];
-  else process.env[name] = value;
+function authorizedRequest(secret: string): Request {
+  return new Request("http://127.0.0.1/api/agent", {
+    method: "POST",
+    headers: { authorization: `Bearer ${secret}` },
+  });
+}
+
+function saveRouteEnv(): Record<string, string | undefined> {
+  return {
+    CRON_SECRET: process.env.CRON_SECRET,
+    X_USER_ACCESS_TOKEN: process.env.X_USER_ACCESS_TOKEN,
+    X_BEARER_TOKEN: process.env.X_BEARER_TOKEN,
+  };
+}
+
+function restoreRouteEnv(previous: Record<string, string | undefined>) {
+  for (const [name, value] of Object.entries(previous)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
 }

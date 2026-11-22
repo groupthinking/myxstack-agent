@@ -53,6 +53,7 @@ Endpoint shape: [Timelines](https://docs.x.com/x-api/posts/timelines/introductio
 
 Set one X credential. Prefer the user token when the app owns @MyXStack.
 
+- `CRON_SECRET` — required. `POST /api/agent` rejects the call unless `Authorization` is `Bearer` plus this value. Vercel cron sends that header when this variable is set.
 - `X_USER_ACCESS_TOKEN` — OAuth 2.0 user token (`tweet.read`, `users.read`)
 - `X_BEARER_TOKEN` — app-only bearer token
 - `X_USER_ID` — optional numeric id; skips the username lookup
@@ -69,4 +70,4 @@ npm test
 npm run dev
 ```
 
-`POST /api/agent` with a real token runs the cycle. Without a token the JSON `status` is `Cycle did not run`.
+`POST /api/agent` runs the cycle only when `Authorization` matches `CRON_SECRET` and an X credential is set. Otherwise the JSON `status` is `Cycle did not run`.
