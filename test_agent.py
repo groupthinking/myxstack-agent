@@ -9,6 +9,7 @@ import json
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -155,6 +156,35 @@ class WebhookTests(unittest.TestCase):
         status, payload = self._request("/webhook?crc_token=abc")
         self.assertEqual(status, 500)
         self.assertEqual(payload["error"], "X_API_SECRET unset")
+        self.assertNotIn("response_token", payload)
+
+    def test_get_crc_refuses_json_shaped_input_and_cannot_forge_a_post(self) -> None:
+        raw = self._mention_body()
+        for bad in (
+            urllib.parse.quote(raw.decode("utf-8"), safe=""),
+            "a%20b",
+            "a%0Ab",
+            "x" * 129,
+        ):
+            status, payload = self._request(f"/webhook?crc_token={bad}")
+            self.assertEqual(status, 400)
+            self.assertEqual(payload["error"], "invalid_crc_token")
+            self.assertNotIn("response_token", payload)
+        # Nothing signed through GET can authenticate the event body on POST.
+        status, payload = self._request(
+            "/webhook",
+            method="POST",
+            body=raw,
+            headers={
+                "Content-Type": "application/json",
+                "X-Twitter-Webhooks-Signature-OAuth2": "sha256=forged",
+            },
+        )
+        self.assertEqual(status, 401)
+
+    def test_get_crc_only_on_webhook_path(self) -> None:
+        status, payload = self._request(f"/health?crc_token={CRC_TOKEN}")
+        self.assertEqual(status, 404)
         self.assertNotIn("response_token", payload)
 
     def test_health_stays_up(self) -> None:

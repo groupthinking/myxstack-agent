@@ -23,6 +23,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -40,6 +41,10 @@ DEFAULT_MENTION_USERNAME = "MyXStack"
 MAX_BODY_BYTES = 1_000_000
 NOTION_TIMEOUT_SECONDS = 8
 WEBHOOK_PATH = "/webhook"
+# X CRC challenges are short opaque tokens. Anything outside this alphabet
+# (braces, quotes, colons, spaces, control characters) is refused so the GET
+# CRC route can never sign JSON-shaped input that would pass POST verification.
+CRC_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_\-+/=.]{1,128}")
 
 
 def crc_response_token(crc_token: str, secret: str) -> str:
@@ -421,6 +426,12 @@ class WebhookHandler(BaseHTTPRequestHandler):
         crc_values = params.get("crc_token") or []
         crc_token = crc_values[0] if crc_values else ""
         if crc_token:
+            if path != WEBHOOK_PATH.rstrip("/"):
+                self._send(404, {"ok": False, "error": "not_found"})
+                return
+            if CRC_TOKEN_PATTERN.fullmatch(crc_token) is None:
+                self._send(400, {"ok": False, "error": "invalid_crc_token"})
+                return
             if not self.app.secret:
                 self._send(500, {"ok": False, "error": "X_API_SECRET unset"})
                 return
